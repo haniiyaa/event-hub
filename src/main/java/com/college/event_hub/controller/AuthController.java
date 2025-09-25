@@ -29,6 +29,7 @@ public class AuthController {
             String password = request.get("password");
             String email = request.get("email");
             String fullName = request.get("fullName");
+            String phoneNumber = request.get("phoneNumber");
             
             if (userService.existsByUsername(username)) {
                 return ResponseEntity.badRequest().body("Username already exists!");
@@ -38,7 +39,7 @@ public class AuthController {
                 return ResponseEntity.badRequest().body("Email already exists!");
             }
             
-            User user = new User(username, password, email, fullName);
+            User user = new User(username, password, email, fullName, phoneNumber);
             User savedUser = userService.createUser(user);
             
             return ResponseEntity.ok("User registered successfully! Username: " + savedUser.getUsername());
@@ -87,6 +88,7 @@ public class AuthController {
             "username", user.getUsername(),
             "email", user.getEmail(),
             "fullName", user.getFullName(),
+            "phoneNumber", user.getPhoneNumber() != null ? user.getPhoneNumber() : "",
             "role", user.getRole()
         ));
     }

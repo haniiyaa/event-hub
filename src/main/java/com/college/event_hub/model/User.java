@@ -25,6 +25,9 @@ public class User {
     @Column(name = "full_name")
     private String fullName;
     
+    @Column(name = "phone_number")
+    private String phoneNumber;
+    
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role = Role.STUDENT;
@@ -54,6 +57,14 @@ public class User {
         this.fullName = fullName;
     }
     
+    public User(String username, String password, String email, String fullName, String phoneNumber) {
+        this.username = username;
+        this.password = password;
+        this.email = email;
+        this.fullName = fullName;
+        this.phoneNumber = phoneNumber;
+    }
+    
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -69,6 +80,9 @@ public class User {
     
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }
+    
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
