@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import clsx from "clsx";
+
 import { apiFetch } from "@/lib/api-client";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useSession } from "@/providers/session-provider";
 
@@ -30,6 +33,7 @@ interface BannerState {
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading: sessionLoading } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roleDrafts, setRoleDrafts] = useState<Record<number, AdminRole>>({});
@@ -148,6 +152,26 @@ export default function AdminUsersPage() {
         <p className="text-sm text-slate-300">
           View all registered users, promote standout students, and adjust access levels across the platform.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {[{ href: "/app/admin/users", label: "Manage users" }, { href: "/app/admin/clubs", label: "Approve clubs" }].map(
+          (item) => {
+            const active = pathname?.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  buttonClasses({ variant: active ? "secondary" : "ghost", size: "sm" }),
+                  active ? "bg-slate-900/60" : ""
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          }
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3">
