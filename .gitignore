@@ -1,12 +1,13 @@
-event-hub/
-event-hub-frontend/
-
 # Backend build artifacts
-backend/target/
-backend/.mvn/
+event-hub/target/
+event-hub/.mvn/
+event-hub/.idea/
+event-hub/.classpath
+event-hub/.project
 
 # Frontend build artifacts
-frontend/node_modules/
-frontend/.next/
-frontend/.turbo/
-frontend/coverage/
+event-hub-frontend/node_modules/
+event-hub-frontend/.next/
+event-hub-frontend/.turbo/
+event-hub-frontend/coverage/
+event-hub-frontend/.idea/
