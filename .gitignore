@@ -1,0 +1,12 @@
+event-hub/
+event-hub-frontend/
+
+# Backend build artifacts
+backend/target/
+backend/.mvn/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/coverage/
