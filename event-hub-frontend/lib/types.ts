@@ -1,6 +1,9 @@
 export type ClubStatus = "PENDING" | "ACTIVE" | "RETIRED";
 export type ClubJoinRequestType = "CREATE_CLUB" | "JOIN_CLUB";
 export type ClubJoinRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type ClubMembershipRole = "MEMBER" | "OFFICER";
+
+export type ChatScope = "CLUB" | "EVENT";
 
 export interface ApiErrorPayload {
   status: number;
@@ -19,6 +22,57 @@ export interface UserSummary {
   phoneNumber?: string | null;
   classDetails?: string | null;
   createdAt?: string | null;
+}
+
+export interface ClubMembershipSummary {
+  id: number;
+  role: ClubMembershipRole;
+  joinedAt: string;
+  club: {
+    id: number;
+    name: string;
+    description?: string | null;
+    status?: ClubStatus;
+  } | null;
+  member?: {
+    id: number;
+    username: string;
+    fullName?: string | null;
+    email?: string | null;
+    phoneNumber?: string | null;
+    classDetails?: string | null;
+  } | null;
+}
+
+export interface ClubBrowseSummary {
+  id: number;
+  name: string;
+  description?: string | null;
+  status: ClubStatus;
+  member: boolean;
+  membershipRole?: ClubMembershipRole | null;
+  pendingRequest: boolean;
+}
+
+export interface ChatAuthorSummary {
+  id: number;
+  username: string;
+  fullName?: string | null;
+}
+
+export interface ChatMessageSummary {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: ChatAuthorSummary;
+}
+
+export interface ChatThreadPayload {
+  threadId: number | null;
+  scope: ChatScope | null;
+  canPost: boolean;
+  lastMessageId: number | null;
+  messages: ChatMessageSummary[];
 }
 
 export interface AdminClub {

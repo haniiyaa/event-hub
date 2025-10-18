@@ -8,6 +8,7 @@ import com.college.event_hub.dto.ClubMembershipResponse;
 import com.college.event_hub.dto.ClubRequest;
 import com.college.event_hub.dto.EventCapacityUpdateRequest;
 import com.college.event_hub.dto.EventRequest;
+import com.college.event_hub.dto.EventSummaryResponse;
 import com.college.event_hub.dto.EventUpdateRequest;
 import com.college.event_hub.dto.InstructionRequest;
 import com.college.event_hub.dto.JoinRequestDecisionRequest;
@@ -300,7 +301,7 @@ public class ClubAdminController {
     
     // Create event in admin's club
     @PostMapping("/events")
-    public ResponseEntity<Event> createEvent(@Valid @RequestBody EventRequest request, Authentication auth) {
+    public ResponseEntity<EventSummaryResponse> createEvent(@Valid @RequestBody EventRequest request, Authentication auth) {
         User admin = requireClubAdmin(auth);
         Club club = requireActiveAdminClub(admin);
 
@@ -313,7 +314,7 @@ public class ClubAdminController {
         event.setClub(club);
 
         Event savedEvent = eventService.createEvent(event);
-        return ResponseEntity.status(HttpStatus.CREATED).body(savedEvent);
+        return ResponseEntity.status(HttpStatus.CREATED).body(EventSummaryResponse.from(savedEvent));
     }
     
     // Get all events in admin's club
@@ -321,7 +322,9 @@ public class ClubAdminController {
     public ResponseEntity<?> getMyEvents(Authentication auth) {
         try {
             User admin = requireClubAdmin(auth);
-            List<Event> events = eventService.findByAdminId(admin.getId());
+            List<EventSummaryResponse> events = eventService.findByAdminId(admin.getId()).stream()
+                .map(EventSummaryResponse::from)
+                .toList();
             return ResponseEntity.ok(events);
         } catch (IllegalStateException e) {
             return ResponseEntity.status(403).body(e.getMessage());
@@ -332,7 +335,7 @@ public class ClubAdminController {
     
     // Update event capacity
     @PutMapping("/events/{eventId}/capacity")
-    public ResponseEntity<Event> updateEventCapacity(@PathVariable Long eventId, @Valid @RequestBody EventCapacityUpdateRequest request, Authentication auth) {
+    public ResponseEntity<EventSummaryResponse> updateEventCapacity(@PathVariable Long eventId, @Valid @RequestBody EventCapacityUpdateRequest request, Authentication auth) {
         User admin = requireClubAdmin(auth);
         Event event = requireEditableEventOwnedByAdmin(eventId, admin);
 
@@ -344,11 +347,11 @@ public class ClubAdminController {
 
         event.setCapacity(newCapacity);
         Event updatedEvent = eventService.updateEvent(event);
-        return ResponseEntity.ok(updatedEvent);
+        return ResponseEntity.ok(EventSummaryResponse.from(updatedEvent));
     }
 
     @PutMapping("/events/{eventId}")
-    public ResponseEntity<Event> updateEvent(@PathVariable Long eventId, @Valid @RequestBody EventUpdateRequest request, Authentication auth) {
+    public ResponseEntity<EventSummaryResponse> updateEvent(@PathVariable Long eventId, @Valid @RequestBody EventUpdateRequest request, Authentication auth) {
         User admin = requireClubAdmin(auth);
         Event event = requireEditableEventOwnedByAdmin(eventId, admin);
 
@@ -374,7 +377,7 @@ public class ClubAdminController {
         }
 
         Event updatedEvent = eventService.updateEvent(event);
-        return ResponseEntity.ok(updatedEvent);
+        return ResponseEntity.ok(EventSummaryResponse.from(updatedEvent));
     }
 
     @DeleteMapping("/events/{eventId}")
@@ -458,6 +461,37 @@ public class ClubAdminController {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error fetching registrations: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/events/{eventId}/registrations/{registrationId}")
+    public ResponseEntity<?> removeRegistration(
+        @PathVariable Long eventId,
+        @PathVariable Long registrationId,
+        Authentication auth
+    ) {
+        try {
+            User admin = requireClubAdmin(auth);
+            Event event = requireEditableEventOwnedByAdmin(eventId, admin);
+
+            Registration registration = registrationService.findById(registrationId);
+            if (registration == null || registration.getEvent() == null || !registration.getEvent().getId().equals(event.getId())) {
+                return ResponseEntity.status(404).body("Registration not found for this event");
+            }
+
+            registrationService.deleteRegistration(registrationId);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Registration removed",
+                "registrationId", registrationId,
+                "eventId", eventId
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error removing registration: " + e.getMessage());
         }
     }
     

@@ -5,14 +5,17 @@ import com.college.event_hub.dto.AdminRoleUpdateRequest;
 import com.college.event_hub.dto.ClubJoinRequestResponse;
 import com.college.event_hub.dto.JoinRequestDecisionRequest;
 import com.college.event_hub.dto.ClubStatusUpdateRequest;
+import com.college.event_hub.dto.EventSummaryResponse;
 import com.college.event_hub.dto.UserResponse;
 import com.college.event_hub.model.Club;
 import com.college.event_hub.model.ClubJoinRequest;
 import com.college.event_hub.model.ClubJoinRequest.RequestType;
 import com.college.event_hub.model.ClubJoinRequest.Status;
+import com.college.event_hub.model.Event;
 import com.college.event_hub.model.User;
 import com.college.event_hub.service.ClubJoinRequestService;
 import com.college.event_hub.service.ClubService;
+import com.college.event_hub.service.EventService;
 import com.college.event_hub.service.UserService;
 import jakarta.validation.Valid;
 import java.util.EnumSet;
@@ -37,6 +40,9 @@ public class AdminController {
 
     @Autowired
     private ClubService clubService;
+
+    @Autowired
+    private EventService eventService;
 
     @Autowired
     private ClubJoinRequestService joinRequestService;
@@ -120,6 +126,27 @@ public class AdminController {
         List<AdminClubResponse> payload = clubs.stream()
             .sorted(Comparator.comparing(Club::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .map(AdminClubResponse::from)
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(payload);
+    }
+
+    @GetMapping("/clubs/{clubId}/events")
+    public ResponseEntity<List<EventSummaryResponse>> listClubEvents(
+        @PathVariable Long clubId,
+        Authentication auth
+    ) {
+        requireSuperAdmin(auth);
+
+        Club club = clubService.findById(clubId);
+        if (club == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Club not found");
+        }
+
+        List<Event> events = eventService.findByClubId(clubId);
+        List<EventSummaryResponse> payload = events.stream()
+            .sorted(Comparator.comparing(Event::getEventDate, Comparator.nullsLast(Comparator.naturalOrder())))
+            .map(EventSummaryResponse::from)
             .collect(Collectors.toList());
 
         return ResponseEntity.ok(payload);

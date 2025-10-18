@@ -2,8 +2,10 @@ package com.college.event_hub.service;
 
 import com.college.event_hub.model.ClubMembership;
 import com.college.event_hub.repository.ClubMembershipRepository;
+import com.college.event_hub.model.Club;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,15 @@ public class ClubMembershipService {
 
     public List<ClubMembership> findByUser(Long userId) {
         return membershipRepository.findByUserId(userId);
+    }
+
+    public List<ClubMembership> findActiveMembershipsByUser(Long userId) {
+        return membershipRepository.findByUserId(userId).stream()
+            .filter(membership -> {
+                Club club = membership.getClub();
+                return club != null && club.getStatus() == Club.Status.ACTIVE;
+            })
+            .collect(Collectors.toList());
     }
 
     public boolean isMember(Long clubId, Long userId) {

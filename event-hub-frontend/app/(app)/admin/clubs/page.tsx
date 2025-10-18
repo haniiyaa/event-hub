@@ -11,7 +11,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { apiFetch } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/date";
-import type { AdminClub, ClubJoinRequestSummary, ClubStatus } from "@/lib/types";
+import type { AdminClub, ClubJoinRequestSummary, ClubStatus, EventSummary } from "@/lib/types";
 import { useSession } from "@/providers/session-provider";
 
 interface BannerState {
@@ -161,9 +161,11 @@ interface ClubsSectionProps {
   onRefresh: () => void | Promise<void>;
   onUpdateStatus: (clubId: number, nextStatus: ClubStatus) => void | Promise<void>;
   pendingClubId: number | null;
+  onViewEvents: (club: AdminClub) => void | Promise<void>;
+  activeClubId: number | null;
 }
 
-function ClubsSection({ clubs, loading, error, filter, onFilterChange, onRefresh, onUpdateStatus, pendingClubId }: ClubsSectionProps) {
+function ClubsSection({ clubs, loading, error, filter, onFilterChange, onRefresh, onUpdateStatus, pendingClubId, onViewEvents, activeClubId }: ClubsSectionProps) {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
@@ -235,8 +237,15 @@ function ClubsSection({ clubs, loading, error, filter, onFilterChange, onRefresh
             <tbody className="divide-y divide-white/5 bg-slate-900/30 text-slate-200">
               {clubs.map((club) => {
                 const isProcessing = pendingClubId === club.id;
+                const isSelected = activeClubId === club.id;
                 return (
-                  <tr key={club.id} className="transition hover:bg-slate-900/60">
+                  <tr
+                    key={club.id}
+                    className={clsx(
+                      "transition hover:bg-slate-900/60",
+                      isSelected ? "bg-slate-900/60" : ""
+                    )}
+                  >
                     <td className="px-6 py-4 align-top">
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-white">{club.name}</span>
@@ -267,6 +276,14 @@ function ClubsSection({ clubs, loading, error, filter, onFilterChange, onRefresh
                     </td>
                     <td className="px-6 py-4 align-top">
                       <div className="flex flex-col items-end gap-2">
+                        <Button
+                          size="sm"
+                          variant={isSelected ? "primary" : "secondary"}
+                          onClick={() => onViewEvents(club)}
+                          disabled={loading}
+                        >
+                          {isSelected ? "Viewing events" : "View events"}
+                        </Button>
                         {club.status !== "ACTIVE" ? (
                           <Button size="sm" onClick={() => onUpdateStatus(club.id, "ACTIVE")} disabled={isProcessing}>
                             {isProcessing ? "Updating…" : "Activate"}
@@ -305,6 +322,79 @@ function ClubsSection({ clubs, loading, error, filter, onFilterChange, onRefresh
   );
 }
 
+interface ClubEventsSectionProps {
+  club: AdminClub | null;
+  events: EventSummary[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void | Promise<void>;
+}
+
+function ClubEventsSection({ club, events, loading, error, onRefresh }: ClubEventsSectionProps) {
+  if (!club) {
+    return (
+      <section className="flex flex-col gap-4 rounded-3xl border border-dashed border-white/10 bg-slate-900/20 p-6 text-center">
+        <h2 className="text-lg font-semibold text-white">Select a club to view its events</h2>
+        <p className="text-sm text-slate-400">
+          Use the View events button in the clubs table to inspect upcoming and past events for that organization.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-semibold text-white">{club.name} · Events</h2>
+          <span className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            {loading
+              ? "Loading events…"
+              : events.length === 0
+              ? "No events found for this club"
+              : `Showing ${events.length} ${events.length === 1 ? "event" : "events"}`}
+          </span>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onRefresh} disabled={loading}>
+          Refresh
+        </Button>
+      </div>
+
+      {error ? (
+        <Alert variant="error" title="Unable to load events" description={error} />
+      ) : loading ? (
+        <div className="flex min-h-[18vh] items-center justify-center">
+          <Spinner />
+        </div>
+      ) : events.length === 0 ? (
+        <Alert
+          variant="info"
+          title="No events"
+          description="This club has not published any events yet."
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {events.map((event) => (
+            <div key={event.id} className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-900/40 p-5">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-lg font-semibold text-white">{event.title}</h3>
+                <span className="text-xs text-slate-400">{formatDateTime(event.eventDate)}</span>
+              </div>
+              <p className="text-sm text-slate-300 line-clamp-3">{event.description}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+                <span>Location: {event.location}</span>
+                <span>
+                  Capacity: {event.currentRegistrations ?? 0}/{event.capacity}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function AdminClubsPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -320,8 +410,18 @@ export default function AdminClubsPage() {
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [pendingRequestId, setPendingRequestId] = useState<number | null>(null);
   const [pendingClubId, setPendingClubId] = useState<number | null>(null);
+  const [activeClubId, setActiveClubId] = useState<number | null>(null);
+  const [clubEvents, setClubEvents] = useState<EventSummary[]>([]);
+  const [clubEventsLoading, setClubEventsLoading] = useState(false);
+  const [clubEventsError, setClubEventsError] = useState<string | null>(null);
 
   const isAdmin = useMemo(() => user?.role === "ADMIN", [user]);
+  const selectedClub = useMemo(() => {
+    if (activeClubId == null) {
+      return null;
+    }
+    return clubs.find((club) => club.id === activeClubId) ?? null;
+  }, [activeClubId, clubs]);
 
   const loadClubs = useCallback(async (filter: ClubFilter) => {
     setClubLoading(true);
@@ -351,6 +451,21 @@ export default function AdminClubsPage() {
     }
   }, []);
 
+  const loadClubEvents = useCallback(async (clubId: number) => {
+    setClubEventsLoading(true);
+    setClubEventsError(null);
+    try {
+      const data = await apiFetch<EventSummary[]>(`/api/admin/clubs/${clubId}/events`);
+      setClubEvents(data);
+    } catch (err) {
+      console.error("Failed to load club events", err);
+      setClubEvents([]);
+      setClubEventsError(err instanceof Error ? err.message : "Failed to load events");
+    } finally {
+      setClubEventsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionLoading) {
       if (!isAdmin) {
@@ -370,6 +485,26 @@ export default function AdminClubsPage() {
       });
     }
   }, [sessionLoading, isAdmin, clubStatusFilter, loadClubs]);
+
+  useEffect(() => {
+    if (activeClubId == null) {
+      setClubEvents([]);
+      setClubEventsError(null);
+      return;
+    }
+    loadClubEvents(activeClubId).catch(() => undefined);
+  }, [activeClubId, loadClubEvents]);
+
+  useEffect(() => {
+    if (activeClubId == null) {
+      return;
+    }
+    if (!clubs.some((club) => club.id === activeClubId)) {
+      setActiveClubId(null);
+      setClubEvents([]);
+      setClubEventsError(null);
+    }
+  }, [activeClubId, clubs]);
 
   const handleRefreshClubs = () => {
     loadClubs(clubStatusFilter).catch(() => {
@@ -460,6 +595,17 @@ export default function AdminClubsPage() {
     [clubStatusFilter, loadClubs]
   );
 
+  const handleViewEvents = useCallback((club: AdminClub) => {
+    setActiveClubId((current) => (current === club.id ? null : club.id));
+  }, []);
+
+  const handleRefreshEvents = useCallback(() => {
+    if (activeClubId == null) {
+      return;
+    }
+    loadClubEvents(activeClubId).catch(() => undefined);
+  }, [activeClubId, loadClubEvents]);
+
   if (sessionLoading || (!isAdmin && (clubLoading || requestLoading))) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -524,6 +670,16 @@ export default function AdminClubsPage() {
         onRefresh={handleRefreshClubs}
         onUpdateStatus={updateClubStatus}
         pendingClubId={pendingClubId}
+        onViewEvents={handleViewEvents}
+        activeClubId={activeClubId}
+      />
+
+      <ClubEventsSection
+        club={selectedClub}
+        events={clubEvents}
+        loading={clubEventsLoading}
+        error={clubEventsError}
+        onRefresh={handleRefreshEvents}
       />
     </div>
   );

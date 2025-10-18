@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { ChatPanel } from "@/components/chat/chat-panel";
 
 interface FeedbackState {
   type: "success" | "error";
@@ -354,6 +355,13 @@ export default function EventDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <ChatPanel
+        resourceType="event"
+        resourceId={Number(event.id)}
+        title="Event chat"
+        disabledReason={isRegistered ? undefined : "Register for this event to join the conversation."}
+      />
     </div>
   );
 }

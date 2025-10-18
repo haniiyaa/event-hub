@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findByClubId(Long clubId);
-    List<Event> findByClubAdminId(Long adminId);
+    List<Event> findByClub_Admin_Id(Long adminId);
     List<Event> findTop5ByEventDateAfterOrderByEventDateAsc(LocalDateTime referenceDate);
     List<Event> findTop10ByEventDateAfterOrderByEventDateAsc(LocalDateTime referenceDate);
     List<Event> findTop5ByClub_Admin_IdAndEventDateAfterOrderByEventDateAsc(Long adminId, LocalDateTime referenceDate);

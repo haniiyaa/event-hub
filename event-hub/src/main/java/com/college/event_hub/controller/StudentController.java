@@ -4,12 +4,15 @@ import com.college.event_hub.dto.ClubCreationRequest;
 import com.college.event_hub.dto.ClubInviteResponse;
 import com.college.event_hub.dto.ClubJoinRequestCreateRequest;
 import com.college.event_hub.dto.ClubJoinRequestResponse;
+import com.college.event_hub.dto.ClubMembershipResponse;
+import com.college.event_hub.dto.ClubBrowseResponse;
 import com.college.event_hub.dto.StudentDashboardResponse;
 import com.college.event_hub.model.Club;
 import com.college.event_hub.model.Event;
 import com.college.event_hub.model.Instruction;
 import com.college.event_hub.model.Registration;
 import com.college.event_hub.model.User;
+import com.college.event_hub.model.ClubMembership;
 import com.college.event_hub.model.ClubJoinRequest;
 import com.college.event_hub.model.ClubJoinRequest.RequestType;
 import com.college.event_hub.model.ClubInvite;
@@ -20,12 +23,16 @@ import com.college.event_hub.service.UserService;
 import com.college.event_hub.service.ClubService;
 import com.college.event_hub.service.ClubJoinRequestService;
 import com.college.event_hub.service.ClubInviteService;
+import com.college.event_hub.service.ClubMembershipService;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -63,6 +70,9 @@ public class StudentController {
 
     @Autowired
     private ClubInviteService inviteService;
+
+    @Autowired
+    private ClubMembershipService membershipService;
 
     @GetMapping("/events")
     public ResponseEntity<?> listEvents(
@@ -324,6 +334,71 @@ public class StudentController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/clubs/memberships")
+    public ResponseEntity<?> myClubMemberships(Authentication auth) {
+        User user = resolveUser(auth);
+
+        List<ClubMembership> memberships = membershipService.findByUser(user.getId());
+        Set<Long> seenClubIds = new HashSet<>();
+        List<ClubMembershipResponse> payload = new ArrayList<>();
+
+        for (ClubMembership membership : memberships) {
+            Club club = membership.getClub();
+            if (club == null) {
+                continue;
+            }
+
+            boolean include = club.getStatus() == Club.Status.ACTIVE;
+            if (!include && user.getRole() == User.Role.CLUB_ADMIN && club.getAdmin() != null && Objects.equals(club.getAdmin().getId(), user.getId())) {
+                include = true;
+            }
+
+            if (!include) {
+                continue;
+            }
+
+            if (seenClubIds.add(club.getId())) {
+                payload.add(ClubMembershipResponse.from(membership));
+            }
+        }
+
+        if (user.getRole() == User.Role.CLUB_ADMIN) {
+            Club adminClub = clubService.findByAdminId(user.getId());
+            if (adminClub != null && seenClubIds.add(adminClub.getId())) {
+                ClubMembership syntheticMembership = new ClubMembership();
+                syntheticMembership.setId(-Math.abs(adminClub.getId()));
+                syntheticMembership.setClub(adminClub);
+                syntheticMembership.setUser(user);
+                syntheticMembership.setRole(ClubMembership.Role.OFFICER);
+                syntheticMembership.setJoinedAt(adminClub.getCreatedAt());
+                payload.add(ClubMembershipResponse.from(syntheticMembership));
+            }
+        }
+
+        return ResponseEntity.ok(payload);
+    }
+
+    @GetMapping("/clubs/available")
+    public ResponseEntity<?> availableClubs(Authentication auth) {
+        User user = resolveUser(auth);
+        List<Club> clubs = clubService.findByStatus(Club.Status.ACTIVE);
+
+        Map<Long, ClubMembership> membershipMap = membershipService.findActiveMembershipsByUser(user.getId()).stream()
+            .filter(membership -> membership.getClub() != null)
+            .collect(Collectors.toMap(membership -> membership.getClub().getId(), membership -> membership, (existing, replacement) -> existing));
+
+        var pendingClubIds = joinRequestService.findByRequester(user.getId()).stream()
+            .filter(request -> request.getType() == RequestType.JOIN_CLUB && request.getStatus() == ClubJoinRequest.Status.PENDING && request.getTargetClub() != null)
+            .map(request -> request.getTargetClub().getId())
+            .collect(Collectors.toSet());
+
+        List<ClubBrowseResponse> payload = clubs.stream()
+            .map(club -> ClubBrowseResponse.from(club, membershipMap.get(club.getId()), pendingClubIds.contains(club.getId())))
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(payload);
     }
 
     private User resolveUser(Authentication auth) {

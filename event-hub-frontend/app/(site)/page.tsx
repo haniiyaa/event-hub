@@ -59,7 +59,7 @@ export default function Home() {
             Orchestrate every campus experience with <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">Event Hub</span>
           </h1>
           <p className="max-w-3xl text-balance text-lg text-slate-200 sm:text-xl">
-            A unified workspace for students, club admins, and super admins to discover events, manage programming, and measure engagement. Built on the secure Spring Boot backend you just completed.
+            A unified workspace for students, club admins, and super admins to discover events, and measure engagement. Built on the secure Spring Boot backend you just completed.
           </p>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
             <Link

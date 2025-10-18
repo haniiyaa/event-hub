@@ -10,10 +10,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { ChatPanel } from "@/components/chat/chat-panel";
 import { apiFetch } from "@/lib/api-client";
 import { formatDateTime, formatRelative } from "@/lib/date";
-import type { ClubAdminDashboardResponse, ClubStatus } from "@/lib/types";
+import type {
+  ClubAdminDashboardResponse,
+  ClubJoinRequestStatus,
+  ClubJoinRequestSummary,
+  ClubStatus,
+} from "@/lib/types";
 import { useSession } from "@/providers/session-provider";
+
+type BannerState = { variant: "success" | "error"; message: string };
 
 export default function ClubDashboardPage() {
   const router = useRouter();
@@ -25,6 +33,28 @@ export default function ClubDashboardPage() {
   const [clubForm, setClubForm] = useState({ name: "", description: "" });
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingClub, setIsCreatingClub] = useState(false);
+  const [joinRequests, setJoinRequests] = useState<ClubJoinRequestSummary[]>([]);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(true);
+  const [joinRequestsError, setJoinRequestsError] = useState<string | null>(null);
+  const [joinRequestFilter, setJoinRequestFilter] = useState<ClubJoinRequestStatus | "ALL">("PENDING");
+  const [decisionBusyId, setDecisionBusyId] = useState<number | null>(null);
+  const [joinRequestBanner, setJoinRequestBanner] = useState<BannerState | null>(null);
+
+  const loadJoinRequests = useCallback(async (status: ClubJoinRequestStatus | "ALL") => {
+    setJoinRequestsLoading(true);
+    setJoinRequestsError(null);
+
+    try {
+      const options = status === "ALL" ? {} : { searchParams: { status } };
+      const payload = await apiFetch<ClubJoinRequestSummary[]>("/api/club-admin/club/join-requests", options);
+      setJoinRequests(payload ?? []);
+    } catch (err) {
+      setJoinRequestsError(err instanceof Error ? err.message : "Unable to load join requests");
+      setJoinRequests([]);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  }, []);
 
   const loadDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     if (mode === "initial") {
@@ -68,6 +98,19 @@ export default function ClubDashboardPage() {
     });
   }, [router, sessionLoading, user, loadDashboard]);
 
+  useEffect(() => {
+    if (!data?.hasClub) {
+      setJoinRequests([]);
+      setJoinRequestsLoading(false);
+      setJoinRequestsError(null);
+      return;
+    }
+
+    loadJoinRequests(joinRequestFilter).catch(() => {
+      // errors handled in loadJoinRequests
+    });
+  }, [data?.hasClub, joinRequestFilter, loadJoinRequests]);
+
   const metrics = useMemo(() => data?.metrics ?? { totalEvents: 0, upcomingEvents: 0, totalRegistrations: 0, instructionCount: 0 }, [data]);
 
   const handleRefresh = () => {
@@ -99,6 +142,48 @@ export default function ClubDashboardPage() {
       setCreateError(err instanceof Error ? err.message : "Unable to create club");
     } finally {
       setIsCreatingClub(false);
+    }
+  };
+
+  const handleJoinRequestFilterChange = (status: ClubJoinRequestStatus | "ALL") => {
+    setJoinRequestFilter(status);
+  };
+
+  const handleApproveJoinRequest = async (requestId: number) => {
+    setDecisionBusyId(requestId);
+    setJoinRequestBanner(null);
+
+    try {
+      await apiFetch(`/api/club-admin/club/join-requests/${requestId}/approve`, { method: "POST" });
+      setJoinRequestBanner({ variant: "success", message: "Join request approved." });
+      await loadJoinRequests(joinRequestFilter);
+    } catch (err) {
+      setJoinRequestBanner({ variant: "error", message: err instanceof Error ? err.message : "Unable to approve request." });
+    } finally {
+      setDecisionBusyId(null);
+    }
+  };
+
+  const handleRejectJoinRequest = async (requestId: number) => {
+    const note = window.prompt("Optionally add a note for the student (leave blank to skip).", "");
+    if (note === null) {
+      return;
+    }
+
+    setDecisionBusyId(requestId);
+    setJoinRequestBanner(null);
+
+    try {
+      await apiFetch(`/api/club-admin/club/join-requests/${requestId}/reject`, {
+        method: "POST",
+        body: note.trim().length > 0 ? JSON.stringify({ message: note.trim() }) : JSON.stringify({}),
+      });
+      setJoinRequestBanner({ variant: "success", message: "Join request rejected." });
+      await loadJoinRequests(joinRequestFilter);
+    } catch (err) {
+      setJoinRequestBanner({ variant: "error", message: err instanceof Error ? err.message : "Unable to reject request." });
+    } finally {
+      setDecisionBusyId(null);
     }
   };
 
@@ -154,6 +239,20 @@ export default function ClubDashboardPage() {
     },
   };
   const statusCallout = statusCallouts[clubStatus];
+
+  const joinRequestStatusLabels: Record<ClubJoinRequestStatus, string> = {
+    PENDING: "Pending",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    CANCELLED: "Cancelled",
+  };
+
+  const joinRequestStatusBadge: Record<ClubJoinRequestStatus, "default" | "success" | "warning" | "info"> = {
+    PENDING: "info",
+    APPROVED: "success",
+    REJECTED: "warning",
+    CANCELLED: "default",
+  };
 
   if (!data.hasClub) {
     return (
@@ -261,6 +360,133 @@ export default function ClubDashboardPage() {
         <MetricCard title="Instructions" value={metrics.instructionCount} tone="amber" />
       </section>
 
+          {data.club?.id ? (
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold text-white">Join requests</h2>
+                  <span className="text-xs uppercase tracking-[0.3em] text-slate-500">Review who wants to join {data.club?.name}.</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="rounded-full border border-white/15 bg-slate-950/60 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    value={joinRequestFilter}
+                    onChange={(event) => handleJoinRequestFilterChange(event.target.value as ClubJoinRequestStatus | "ALL")}
+                  >
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="CANCELLED">Cancelled</option>
+                    <option value="ALL">All statuses</option>
+                  </select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => loadJoinRequests(joinRequestFilter).catch(() => undefined)}
+                    disabled={joinRequestsLoading}
+                  >
+                    {joinRequestsLoading ? "Refreshing…" : "Refresh"}
+                  </Button>
+                </div>
+              </div>
+
+              {joinRequestBanner ? (
+                <Alert
+                  variant={joinRequestBanner.variant}
+                  title={joinRequestBanner.variant === "success" ? "Success" : "Notice"}
+                  description={joinRequestBanner.message}
+                />
+              ) : null}
+
+              <Card className="border-white/10 bg-slate-900/40">
+                <CardContent className="space-y-4">
+                  {joinRequestsError ? (
+                    <Alert variant="error" title="Unable to load join requests" description={joinRequestsError} />
+                  ) : joinRequestsLoading ? (
+                    <div className="flex min-h-[16rem] items-center justify-center">
+                      <Spinner />
+                    </div>
+                  ) : joinRequests.length === 0 ? (
+                    <Alert
+                      variant="info"
+                      title="No requests"
+                      description={joinRequestFilter === "PENDING" ? "You have no pending requests right now." : "No requests match the selected filter."}
+                    />
+                  ) : (
+                    <ul className="space-y-4">
+                      {joinRequests.map((request) => (
+                        <li key={request.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold text-white">
+                                  {request.requester?.fullName || request.requester?.username || "Unknown student"}
+                                </span>
+                                <Badge variant={joinRequestStatusBadge[request.status]}>{joinRequestStatusLabels[request.status]}</Badge>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                                {request.requester?.email ? <span>{request.requester.email}</span> : null}
+                                {request.createdAt ? (
+                                  <span className="uppercase tracking-[0.25em] text-slate-500">
+                                    Requested {formatRelative(request.createdAt)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            {request.status !== "PENDING" && request.reviewedAt ? (
+                              <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                                Reviewed {formatRelative(request.reviewedAt)}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {request.message ? (
+                            <div className="space-y-1">
+                              <span className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                                {request.status === "PENDING"
+                                  ? "Student message"
+                                  : request.status === "CANCELLED"
+                                    ? "Student note"
+                                    : "Admin note"}
+                              </span>
+                              <p className="text-sm text-slate-300">{request.message}</p>
+                            </div>
+                          ) : null}
+
+                          {request.status !== "PENDING" && request.reviewer ? (
+                            <p className="text-xs text-slate-400">
+                              Decision by {request.reviewer.fullName || request.reviewer.username || "Club admin"}
+                            </p>
+                          ) : null}
+
+                          {request.status === "PENDING" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleApproveJoinRequest(request.id)}
+                                disabled={decisionBusyId === request.id}
+                              >
+                                {decisionBusyId === request.id ? "Processing…" : "Approve"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleRejectJoinRequest(request.id)}
+                                disabled={decisionBusyId === request.id}
+                              >
+                                {decisionBusyId === request.id ? "Processing…" : "Reject"}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
+
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-white/10 bg-slate-900/40">
           <CardHeader>
@@ -333,6 +559,15 @@ export default function ClubDashboardPage() {
           </CardContent>
         </Card>
       </section>
+
+      {data.club?.id ? (
+        <ChatPanel
+          resourceType="club"
+          resourceId={Number(data.club.id)}
+          title="Club chat"
+          disabledReason={isActiveClub ? undefined : "Club chat unlocks once your club is active."}
+        />
+      ) : null}
     </div>
   );
 }

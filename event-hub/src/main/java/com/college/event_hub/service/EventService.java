@@ -36,7 +36,7 @@ public class EventService {
     }
     
     public List<Event> findByAdminId(Long adminId) {
-        return eventRepository.findByClubAdminId(adminId);
+        return eventRepository.findByClub_Admin_Id(adminId);
     }
     
     public List<Event> findAll() {

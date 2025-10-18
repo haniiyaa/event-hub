@@ -67,6 +67,8 @@ public class ClubMembershipResponse {
     public static class SimpleClub {
         private Long id;
         private String name;
+        private String description;
+        private Club.Status status;
 
         public static SimpleClub from(Club club) {
             if (club == null) {
@@ -75,6 +77,8 @@ public class ClubMembershipResponse {
             SimpleClub simpleClub = new SimpleClub();
             simpleClub.setId(club.getId());
             simpleClub.setName(club.getName());
+            simpleClub.setDescription(club.getDescription());
+            simpleClub.setStatus(club.getStatus());
             return simpleClub;
         }
 
@@ -92,6 +96,22 @@ public class ClubMembershipResponse {
 
         public void setName(String name) {
             this.name = name;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public Club.Status getStatus() {
+            return status;
+        }
+
+        public void setStatus(Club.Status status) {
+            this.status = status;
         }
     }
 
