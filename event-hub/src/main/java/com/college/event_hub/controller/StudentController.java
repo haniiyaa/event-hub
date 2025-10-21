@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.college.event_hub.dto.EventSummaryResponse;
 
 @RestController
 @RequestMapping("/api/student")
@@ -100,7 +101,8 @@ public class StudentController {
         if (!isEventVisibleToStudents(event)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(event);
+        // Return a lightweight DTO to avoid deep entity graph serialization (chat threads/messages)
+        return ResponseEntity.ok(EventSummaryResponse.from(event));
     }
 
     @PostMapping("/clubs/{clubId}/join-requests")
